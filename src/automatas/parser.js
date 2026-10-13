@@ -27,11 +27,23 @@ function parse(tokens) {
             match('TK_PAR_DER');
             return { action: 'ASIGNAR', params: { id } };
         }
+        case 'TK_ALMACENAR': {
+            match('TK_PAR_IZQ');
+            const id = match('TK_ID').value;
+            match('TK_PAR_DER');
+            return { action: 'ALMACENAR', params: { id } };
+        }
         case 'TK_AUTORIZAR_RETIRO': {
             match('TK_PAR_IZQ');
             const id = match('TK_ID').value;
             match('TK_PAR_DER');
             return { action: 'AUTORIZAR_RETIRO', params: { id } };
+        }
+        case 'TK_RETIRAR': {
+            match('TK_PAR_IZQ');
+            const id = match('TK_ID').value;
+            match('TK_PAR_DER');
+            return { action: 'RETIRAR', params: { id } };
         }
         case 'TK_APAGAR_ALARMA': {
             match('TK_PAR_IZQ');

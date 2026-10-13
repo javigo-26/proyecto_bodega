@@ -3,7 +3,40 @@ const { ReadlineParser } = require('@serialport/parser-readline');
 const { poolPromise, sql } = require('../config/db');
 require('dotenv').config();
 
+/*
+ * Protocolo Serial (un JSON por línea, 115200 baudios)
+ *
+ * Backend → ESP32
+ *   {"type":"EVENT","space":"A1","state":"AVAILABLE|PARTIAL|OCCUPIED|ALARM"}   LED verde / amarillo / rojo / alarma
+ *   {"type":"COMMAND","action":"CONFIRM_STORAGE","space":"A1","package":"P001"}
+ *   {"type":"COMMAND","action":"AUTHORIZE_WITHDRAWAL","space":"A1","package":"P001","seconds":60}
+ *   {"type":"COMMAND","action":"CONFIRM_WITHDRAWAL","space":"A1","package":"P001"}
+ *   {"type":"COMMAND","action":"CLEAR_ALARM"}
+ *   {"type":"COMMAND","action":"MEASURE","package":"P001"}
+ *
+ * ESP32 → Backend
+ *   {"type":"ALARM","space":"A1","reason":"UNAUTHORIZED_REMOVAL"}
+ *   {"type":"MEASUREMENT","size":"MEDIANO","sensors":{"HS":1,"HM":0,"WS":1,"WM":0,"DS":0,"DM":0}}
+ *   {"type":"ERROR","message":"..."}
+ */
+
+const TIEMPO_MEDICION_MS = 5000; // Espera máxima de la respuesta del ESP32 al medir
+
 let port = null;
+let medicionPendiente = null; // { resolve, reject, temporizador } de la medición en curso
+
+// Crea un error con el código HTTP que debe responder la API
+const crearError = (status, mensaje) => Object.assign(new Error(mensaje), { status });
+
+// Termina la medición en curso con la lectura o con el error recibido
+function terminarMedicion(error, lectura) {
+    if (!medicionPendiente) return;
+    const { resolve, reject, temporizador } = medicionPendiente;
+    clearTimeout(temporizador);
+    medicionPendiente = null;
+    if (error) reject(error);
+    else resolve(lectura);
+}
 
 try {
     port = new SerialPort({
@@ -30,7 +63,7 @@ try {
             if (data.type === 'ALARM') {
                 console.warn(`🚨 ¡ALARMA DETECTADA EN ESPACIO ${data.space}!`);
                 const pool = await poolPromise;
-                
+
                 // Cambiar estado_id = 4 ('ALARMA') en la BD
                 await pool.request()
                     .input('codigo', sql.VarChar(5), data.space)
@@ -46,6 +79,10 @@ try {
                         VALUES (@espacio_codigo, @tipo_evento, @descripcion)
                     `);
             }
+
+            // Respuesta a la solicitud de medición
+            if (data.type === 'MEASUREMENT') terminarMedicion(null, data);
+            if (data.type === 'ERROR') terminarMedicion(crearError(502, `El ESP32 reportó un error: ${data.message}`));
         } catch (err) {
             console.error('⚠️ Error procesando mensaje Serial:', err.message);
         }
@@ -68,4 +105,23 @@ function sendCommand(commandObj) {
     }
 }
 
-module.exports = { sendCommand };
+// Pide al ESP32 leer los 6 sensores de la estación y espera su respuesta MEASUREMENT
+function solicitarMedicion(paqueteId) {
+    if (!port || !port.isOpen) {
+        return Promise.reject(crearError(503, 'El ESP32 no está conectado. Conéctalo por USB para medir paquetes.'));
+    }
+    if (medicionPendiente) {
+        return Promise.reject(crearError(409, 'Ya hay una medición en curso. Espera unos segundos.'));
+    }
+
+    return new Promise((resolve, reject) => {
+        const temporizador = setTimeout(
+            () => terminarMedicion(crearError(504, 'El ESP32 no respondió la medición a tiempo.')),
+            TIEMPO_MEDICION_MS
+        );
+        medicionPendiente = { resolve, reject, temporizador };
+        sendCommand({ type: 'COMMAND', action: 'MEASURE', package: paqueteId });
+    });
+}
+
+module.exports = { sendCommand, solicitarMedicion };
