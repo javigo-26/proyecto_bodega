@@ -1,4 +1,4 @@
-create database proyecto_Bodega;
+IF DB_ID('proyecto_Bodega') IS NULL CREATE DATABASE proyecto_Bodega;
 go
 USE proyecto_Bodega; 
 GO
@@ -38,8 +38,8 @@ CREATE TABLE Estados (
 
 INSERT INTO Estados (id, nombre, descripcion) VALUES
 (1, 'DISPONIBLE', 'Celda libre para almacenar'),
-(2, 'RESERVADO', 'Celda asignada a un paquete'),
-(3, 'OCUPADO', 'Paquete colocado físicamente en la celda'),
+(2, 'PARCIAL', 'Celda con paquetes y cupo libre'),
+(3, 'OCUPADO', 'Celda llena, sin cupo'),
 (4, 'ALARMA', 'Movimiento o retiro no autorizado'),
 (5, 'REGISTRADO', 'Paquete registrado en el sistema'),
 (6, 'ASIGNADO', 'Paquete asignado a una celda'),
@@ -77,6 +77,7 @@ CREATE TABLE Paquetes (
     tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('NORMAL', 'FRAGIL')),
     tamano VARCHAR(10) NOT NULL CHECK (tamano IN ('PEQUENO', 'MEDIANO', 'GRANDE')),
     estado_id INT NOT NULL DEFAULT 5 FOREIGN KEY REFERENCES Estados(id),
+    activo BIT NOT NULL DEFAULT 1, -- Eliminado logico: 0 = eliminado (la fila no se borra)
     fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

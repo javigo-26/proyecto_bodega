@@ -11,6 +11,11 @@ router.post('/login', authController.login);
 router.get('/espacios', bodegaController.getEspacios);
 router.post('/alarmas/apagar', bodegaController.apagarAlarma);
 
+// Rutas de Paquetes (solo activos, eliminado lógico) y de la estación de medición
+router.get('/paquetes', bodegaController.getPaquetes);
+router.delete('/paquetes/:id', bodegaController.eliminarPaquete);
+router.post('/medicion', bodegaController.medirPaquete);
+
 // Ruta para la consola del Lenguaje Formal (Autómatas)[cite: 12]
 router.post('/lenguaje/ejecutar', automatasController.processCommand);
 
