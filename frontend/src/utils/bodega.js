@@ -6,11 +6,17 @@ export const CAPACIDAD = { PEQUENO: 3, MEDIANO: 2, GRANDE: 1 };
 export const TAMANOS = ['PEQUENO', 'MEDIANO', 'GRANDE'];
 export const TIPOS = ['NORMAL', 'FRAGIL'];
 
-// Posición física de los casilleros en el mueble (3 columnas × 2 filas)
-export const ORDEN_CASILLEROS = ['A1', 'A2', 'A3', 'A4', 'F1', 'F2'];
+// Posición física de los 3 compartimentos de la maqueta (una fila): A1 y A2 normales, F1 frágiles
+export const ORDEN_CASILLEROS = ['A1', 'A2', 'F1'];
 
-// Estados de paquete que cuentan como registro activo (ocupa un casillero)
-export const ESTADOS_ACTIVOS = ['ASIGNADO', 'ALMACENADO', 'RETIRO_AUTORIZADO'];
+// Estados de paquete que cuentan como registro activo
+export const ESTADOS_ACTIVOS = ['REGISTRADO', 'ASIGNADO', 'ALMACENADO', 'RETIRO_AUTORIZADO'];
+
+// Detectado en la estación y esperando que el operador lo almacene o lo cancele
+const ESTADOS_EN_RECEPCION = ['REGISTRADO', 'ASIGNADO'];
+
+// Guardado físicamente en un casillero
+const ESTADOS_GUARDADOS = ['ALMACENADO', 'RETIRO_AUTORIZADO'];
 
 // Formato del identificador de paquete (igual que en el analizador léxico)
 export const PATRON_ID = /^P\d{3}$/;
@@ -67,9 +73,15 @@ export const normalizarPaquete = (paquete) => ({
   estado: paquete.estado ?? ESTADOS_POR_ID[paquete.estado_id],
 });
 
-// Registro activo: no eliminado lógicamente y guardado en un casillero
+// Registro activo: no eliminado lógicamente y todavía dentro de la bodega
 export const esActivo = (paquete) =>
   paquete.activo !== false && paquete.activo !== 0 && ESTADOS_ACTIVOS.includes(paquete.estado);
+
+// El paquete está en la tabla de recepción (pendiente de almacenar)
+export const enRecepcion = (paquete) => ESTADOS_EN_RECEPCION.includes(paquete.estado);
+
+// El paquete ya está guardado en un casillero
+export const estaGuardado = (paquete) => ESTADOS_GUARDADOS.includes(paquete.estado);
 
 // Capacidad del casillero según el tamaño fijado (null si está vacío)
 export function capacidadActual(espacio) {
@@ -85,23 +97,38 @@ export function nivelEspacio(espacio) {
   return espacio.ocupacion_actual < capacidad ? 'PARCIAL' : 'LLENO';
 }
 
-// Cuántos paquetes más de un tamaño acepta el casillero (no se mezclan tamaños)
-export function cuposLibres(espacio, tamano) {
-  if (enAlarma(espacio)) return 0;
+// Cuántos paquetes más de ese tipo y tamaño acepta el casillero.
+// Cada casillero tiene tipo fijo (A1 y A2 normales, F1 frágiles). Vacío acepta cualquier tamaño de su tipo;
+// con paquetes, solo el mismo tamaño (no se mezclan).
+export function cuposLibres(espacio, tipo, tamano) {
+  if (enAlarma(espacio) || espacio.tipo !== tipo) return 0;
   if (!espacio.ocupacion_actual) return CAPACIDAD[tamano];
   if (espacio.modo_tamano !== tamano) return 0;
   return Math.max(CAPACIDAD[tamano] - espacio.ocupacion_actual, 0);
 }
 
-// Indica si el casillero puede recibir al menos un paquete más
-export const tieneCupo = (espacio) => TAMANOS.some((tamano) => cuposLibres(espacio, tamano) > 0);
+// Indica si el casillero acepta al menos un paquete más de algún tipo
+export const tieneCupo = (espacio) =>
+  TIPOS.some((tipo) => TAMANOS.some((tamano) => cuposLibres(espacio, tipo, tamano) > 0));
 
-// Resume los cupos libres por tamaño, separados en casilleros normales y frágiles
+// Indica si el casillero acepta al menos un paquete más de ese tipo (de cualquier tamaño)
+export const aceptaTipo = (espacio, tipo) => TAMANOS.some((tamano) => cuposLibres(espacio, tipo, tamano) > 0);
+
+// Casilleros con cupo para ese tipo y tamaño, en el orden en que ASIGNAR los elige:
+// primero los que ya tienen paquetes iguales (para completarlos), luego los vacíos. El primero es el sugerido.
+export const casillerosCompatibles = (espacios, tipo, tamano) =>
+  espacios
+    .filter((espacio) => cuposLibres(espacio, tipo, tamano) > 0)
+    .sort((a, b) => Number(!a.ocupacion_actual) - Number(!b.ocupacion_actual) || a.codigo.localeCompare(b.codigo));
+
+// Resume los cupos libres por tamaño para paquetes normales (A1, A2) y frágiles (F1)
 export function disponibilidadPorTamano(espacios) {
   return TAMANOS.map((tamano) => {
     const fila = { tamano, capacidad: CAPACIDAD[tamano], NORMAL: 0, FRAGIL: 0 };
     espacios.forEach((espacio) => {
-      if (espacio.tipo in fila) fila[espacio.tipo] += cuposLibres(espacio, tamano);
+      TIPOS.forEach((tipo) => {
+        fila[tipo] += cuposLibres(espacio, tipo, tamano);
+      });
     });
     return fila;
   });
@@ -125,12 +152,13 @@ export function iniciales(nombre = '') {
   return letras || '?';
 }
 
-// Formatea fechas de SQL Server; mssql las entrega como UTC, por eso se muestran en UTC
-export function formatearFecha(valor) {
+// Formatea fechas de SQL Server; mssql las entrega como UTC, por eso se muestran en UTC.
+// Con segundos: true incluye los segundos (bitácora de operaciones).
+export function formatearFecha(valor, { segundos = false } = {}) {
   if (!valor) return '—';
   const fecha = new Date(valor);
   if (Number.isNaN(fecha.getTime())) return '—';
-  return fecha.toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short', timeZone: 'UTC' });
+  return fecha.toLocaleString('es-GT', { dateStyle: 'short', timeStyle: segundos ? 'medium' : 'short', timeZone: 'UTC' });
 }
 
 // Formatea una hora del navegador (hora local)

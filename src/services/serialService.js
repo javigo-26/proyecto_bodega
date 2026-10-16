@@ -15,6 +15,9 @@ require('dotenv').config();
  *   {"type":"COMMAND","action":"MEASURE","package":"P001"}
  *
  * ESP32 → Backend
+ *   {"type":"PACKAGE","fragile":true,"size":"MEDIANO","sensors":{"HS":1,"HM":0,"WS":1,"WM":0,"DS":0,"DM":0}}
+ *       Paquete colocado en la estación de recepción: la placa indica si es frágil y los sensores el tamaño.
+ *       "fragile" es obligatorio (true/false o 1/0); si falta, el paquete se rechaza y queda en la bitácora.
  *   {"type":"ALARM","space":"A1","reason":"UNAUTHORIZED_REMOVAL"}
  *   {"type":"MEASUREMENT","size":"MEDIANO","sensors":{"HS":1,"HM":0,"WS":1,"WM":0,"DS":0,"DM":0}}
  *   {"type":"ERROR","message":"..."}
@@ -61,8 +64,25 @@ try {
             const data = JSON.parse(rawMessage);
 
             if (data.type === 'ALARM') {
-                console.warn(`🚨 ¡ALARMA DETECTADA EN ESPACIO ${data.space}!`);
                 const pool = await poolPromise;
+                const { registrarOperacion } = require('./bodegaService'); // se carga aquí para evitar una dependencia circular
+
+                // Solo se aceptan compartimentos que existen en la base (A1, A2, F1)
+                const existe = await pool.request()
+                    .input('codigo', sql.VarChar(5), String(data.space ?? ''))
+                    .query('SELECT 1 AS existe FROM Espacios WHERE codigo = @codigo');
+                if (existe.recordset.length === 0) {
+                    console.warn(`⚠️ El ESP32 reportó una alarma en "${data.space}", que no es un compartimento válido.`);
+                    await registrarOperacion({
+                        instruccion: `ALARMA(${data.space ?? '?'})`,
+                        resultado: 'RECHAZADA',
+                        detalle: 'El ESP32 reportó un compartimento que no existe',
+                        origen: 'ESP32'
+                    });
+                    return;
+                }
+
+                console.warn(`🚨 ¡ALARMA DETECTADA EN ESPACIO ${data.space}!`);
 
                 // Cambiar estado_id = 4 ('ALARMA') en la BD
                 await pool.request()
@@ -78,6 +98,21 @@ try {
                         INSERT INTO EventosSeguridad (espacio_codigo, tipo_evento, descripcion)
                         VALUES (@espacio_codigo, @tipo_evento, @descripcion)
                     `);
+
+                // También queda en la bitácora de operaciones
+                await registrarOperacion({
+                    instruccion: `ALARMA(${data.space})`,
+                    resultado: 'ALERTA',
+                    detalle: `Retiro no autorizado detectado en ${data.space}`,
+                    origen: 'ESP32'
+                });
+            }
+
+            // Paquete detectado en la estación de recepción: se registra solo con un id automático
+            if (data.type === 'PACKAGE') {
+                const { recibirPaquete } = require('./recepcionService'); // se carga aquí para evitar una dependencia circular
+                const paquete = await recibirPaquete(data);
+                console.log(`📦 Paquete ${paquete.id} detectado: ${paquete.tipo} / ${paquete.tamano}`);
             }
 
             // Respuesta a la solicitud de medición

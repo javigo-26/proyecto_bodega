@@ -12,8 +12,9 @@ const posicion = (codigo) => {
   return indice === -1 ? ORDEN_CASILLEROS.length : indice;
 };
 
-// Dibuja los casilleros (3 × 2) con sus cajas; se redibuja con cada actualización en vivo
-export default function LockerGrid({ espacios, paquetes }) {
+// Dibuja los casilleros con sus cajas; se redibuja con cada actualización en vivo.
+// Opcional: `destino` resalta el casillero que recibirá un paquete (módulo de recepción).
+export default function LockerGrid({ espacios, paquetes, destino }) {
   // Agrupa los ids de paquetes activos por casillero
   const idsPorCasillero = useMemo(() => {
     const mapa = {};
@@ -35,14 +36,19 @@ export default function LockerGrid({ espacios, paquetes }) {
   return (
     <div className="lockers">
       {ordenados.map((espacio) => (
-        <Locker key={espacio.codigo} espacio={espacio} ids={idsPorCasillero[espacio.codigo] ?? []} />
+        <Locker
+          key={espacio.codigo}
+          espacio={espacio}
+          ids={idsPorCasillero[espacio.codigo] ?? []}
+          destino={espacio.codigo === destino}
+        />
       ))}
     </div>
   );
 }
 
 // Casillero individual: LEDs de estado, cajas guardadas y ocupación
-function Locker({ espacio, ids }) {
+function Locker({ espacio, ids, destino }) {
   const { codigo, tipo, modo_tamano: modo, ocupacion_actual: ocupacion } = espacio;
   const capacidad = capacidadActual(espacio);
   const nivel = nivelEspacio(espacio);
@@ -50,12 +56,23 @@ function Locker({ espacio, ids }) {
   const ledEncendido = LED_POR_NIVEL[nivel];
   const IconoCaja = fragil ? FaWineGlassAlt : FaBox;
   const tamanoVisual = capacidad === null ? 'vacio' : (modo ?? 'grande').toLowerCase();
-  const cupo = nivel === 'PARCIAL' ? `, acepta ${capacidad - ocupacion} más de tamaño ${etiqueta(modo).toLowerCase()}` : '';
+  const cupo =
+    nivel === 'PARCIAL'
+      ? `, acepta ${capacidad - ocupacion} más de tipo ${etiqueta(tipo).toLowerCase()} y tamaño ${etiqueta(modo).toLowerCase()}`
+      : '';
+  const clases = [
+    'locker',
+    `locker--${nivel.toLowerCase()}`,
+    fragil && 'locker--fragil',
+    destino && 'locker--destino',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <article
-      className={`locker locker--${nivel.toLowerCase()}${fragil ? ' locker--fragil' : ''}`}
-      aria-label={`Casillero ${codigo}: ${etiqueta(nivel)}, ${ocupacion} de ${capacidad ?? 0} paquetes${cupo}`}
+      className={clases}
+      aria-label={`Casillero ${codigo}: ${etiqueta(nivel)}, ${ocupacion} de ${capacidad ?? 0} paquetes${cupo}${destino ? ', destino del paquete señalado' : ''}`}
     >
       <header className="locker__header">
         <span className="locker__code">{codigo}</span>
@@ -68,6 +85,7 @@ function Locker({ espacio, ids }) {
       </header>
 
       <div className={`locker__body locker__body--${tamanoVisual}`} style={{ '--slots': capacidad ?? 1 }}>
+        {destino && <span className="locker__tag">Destino</span>}
         {capacidad === null ? (
           <span className="locker__empty">Vacío</span>
         ) : (

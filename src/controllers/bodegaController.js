@@ -7,11 +7,14 @@ const {
     expirarAutorizaciones,
     interpretarMedicion,
     liberarCupo,
+    listarOperaciones,
     listarPaquetesActivos,
-    obtenerPaquete
+    obtenerPaquete,
+    registrarOperacion
 } = require('../services/bodegaService');
 
 const PATRON_ID = /^P\d{3}$/; // Mismo formato de identificador que el analizador léxico
+const PATRON_FECHA = /^\d{4}-\d{2}-\d{2}$/; // Fecha de los filtros: YYYY-MM-DD
 
 // Obtener el estado de las 6 celdas con el nombre textual del estado
 exports.getEspacios = async (req, res) => {
@@ -41,6 +44,7 @@ exports.apagarAlarma = async (req, res) => {
         // También envía la orden de apagado de alarma física al ESP32 por USB/Serial[cite: 3, 4]
         const espacios = await apagarAlarmas();
         const message = espacios.length ? `Alarma apagada en ${espacios.join(', ')}.` : 'No había alarmas activas.';
+        await registrarOperacion({ instruccion: 'APAGAR_ALARMA', resultado: 'ACEPTADA', detalle: message });
         res.json({ success: true, message });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -60,10 +64,13 @@ exports.getPaquetes = async (req, res) => {
 // Eliminado lógico: el paquete queda inactivo y, si ocupaba un casillero, libera su lugar
 exports.eliminarPaquete = async (req, res) => {
     const { id } = req.params;
+    const instruccion = `ELIMINAR(${id})`;
     try {
         const paquete = await obtenerPaquete(id);
         if (!paquete || !paquete.activo) {
-            return res.status(404).json({ error: `El paquete ${id} no existe o ya fue eliminado.` });
+            const error = `El paquete ${id} no existe o ya fue eliminado.`;
+            await registrarOperacion({ instruccion, resultado: 'RECHAZADA', detalle: error });
+            return res.status(404).json({ error });
         }
 
         const espacio = paquete.espacio_codigo;
@@ -79,7 +86,24 @@ exports.eliminarPaquete = async (req, res) => {
 
         if (espacio) await enviarEstadoEspacio(espacio);
         const detalle = espacio ? ` y se liberó su lugar en ${espacio}` : '';
-        res.json({ success: true, message: `Paquete ${id} eliminado${detalle}.` });
+        const message = `Paquete ${id} eliminado${detalle}.`;
+        await registrarOperacion({ instruccion, resultado: 'ACEPTADA', detalle: message });
+        res.json({ success: true, message });
+    } catch (err) {
+        await registrarOperacion({ instruccion, resultado: 'RECHAZADA', detalle: err.message });
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Bitácora de operaciones; ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD filtra por fecha (ambas opcionales)
+exports.getOperaciones = async (req, res) => {
+    const { desde, hasta } = req.query;
+    if ((desde && !PATRON_FECHA.test(desde)) || (hasta && !PATRON_FECHA.test(hasta))) {
+        return res.status(400).json({ error: 'Las fechas deben tener el formato AAAA-MM-DD.' });
+    }
+
+    try {
+        res.json(await listarOperaciones({ desde, hasta }));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -6,10 +6,9 @@ import {
   FaBoxes,
   FaCheck,
   FaEye,
+  FaInbox,
   FaLayerGroup,
-  FaPlus,
   FaPowerOff,
-  FaSignInAlt,
   FaSignOutAlt,
   FaUserCircle,
   FaWarehouse,
@@ -20,7 +19,16 @@ import PaquetesTable from '../components/PaquetesTable.jsx';
 import StatCard from '../components/StatCard.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useBodega } from '../context/BodegaContext.jsx';
-import { disponibilidadPorTamano, etiqueta, formatearHora, iniciales, tieneCupo } from '../utils/bodega.js';
+import {
+  aceptaTipo,
+  disponibilidadPorTamano,
+  enRecepcion,
+  estaGuardado,
+  etiqueta,
+  formatearHora,
+  iniciales,
+  tieneCupo,
+} from '../utils/bodega.js';
 
 // Fecha usada para ordenar paquetes del más reciente al más antiguo
 const fechaDe = (paquete) => new Date(paquete.fecha_ingreso ?? paquete.fecha_registro ?? 0).getTime();
@@ -31,18 +39,22 @@ export default function Dashboard() {
 
   // Indicadores de las tarjetas superiores
   const resumen = useMemo(() => {
-    const conCupo = espacios.filter(tieneCupo);
-    const contar = (lista, tipo) => lista.filter((espacio) => espacio.tipo === tipo).length;
+    // Casilleros de ese tipo que todavía aceptan algún paquete (A1 y A2 normales, F1 frágiles)
+    const aceptan = (tipo) => `${espacios.filter((espacio) => aceptaTipo(espacio, tipo)).length}/${espacios.length}`;
     return {
-      conCupo: conCupo.length,
+      conCupo: espacios.filter(tieneCupo).length,
       enUso: espacios.filter((espacio) => espacio.ocupacion_actual > 0).length,
-      normales: `${contar(conCupo, 'NORMAL')}/${contar(espacios, 'NORMAL')}`,
-      fragiles: `${contar(conCupo, 'FRAGIL')}/${contar(espacios, 'FRAGIL')}`,
+      normales: aceptan('NORMAL'),
+      fragiles: aceptan('FRAGIL'),
     };
   }, [espacios]);
 
+  // Paquetes ya guardados en un casillero y los que esperan en recepción
+  const guardados = useMemo(() => paquetes.filter(estaGuardado), [paquetes]);
+  const enEspera = paquetes.filter(enRecepcion).length;
+
   // Últimos 10 paquetes almacenados
-  const ultimos = useMemo(() => [...paquetes].sort((a, b) => fechaDe(b) - fechaDe(a)).slice(0, 10), [paquetes]);
+  const ultimos = useMemo(() => [...guardados].sort((a, b) => fechaDe(b) - fechaDe(a)).slice(0, 10), [guardados]);
 
   const verCasilleros = { etiqueta: 'Ver casilleros', icono: FaEye, href: '#casilleros' };
 
@@ -51,11 +63,11 @@ export default function Dashboard() {
       <section className="stats" aria-label="Indicadores de la bodega">
         <StatCard
           color="purple"
-          valor={errorPaquetes ? '—' : paquetes.length}
+          valor={errorPaquetes ? '—' : guardados.length}
           titulo="Paquetes almacenados"
           icono={FaBoxOpen}
           acciones={[
-            { etiqueta: 'Nuevo', icono: FaPlus, to: '/medicion' },
+            { etiqueta: enEspera ? `Recepción (${enEspera})` : 'Recepción', icono: FaInbox, to: '/recepcion' },
             { etiqueta: 'Ver', icono: FaEye, to: '/paquetes' },
           ]}
         />
@@ -64,7 +76,7 @@ export default function Dashboard() {
           valor={`${resumen.conCupo}/${espacios.length}`}
           titulo="Casilleros con cupo"
           icono={FaWarehouse}
-          acciones={[{ etiqueta: 'Autorizar ingreso', icono: FaSignInAlt, to: '/autorizaciones' }]}
+          acciones={[verCasilleros]}
         />
         <StatCard
           color="warning"
@@ -84,8 +96,8 @@ export default function Dashboard() {
               : { etiqueta: 'Sin alarmas', icono: FaCheck },
           ]}
         />
-        <StatCard color="primary" valor={resumen.normales} titulo="Normales con cupo" icono={FaBox} acciones={[verCasilleros]} />
-        <StatCard color="indigo" valor={resumen.fragiles} titulo="Frágiles con cupo" icono={FaWineGlassAlt} acciones={[verCasilleros]} />
+        <StatCard color="primary" valor={resumen.normales} titulo="Aceptan normales" icono={FaBox} acciones={[verCasilleros]} />
+        <StatCard color="indigo" valor={resumen.fragiles} titulo="Aceptan frágiles" icono={FaWineGlassAlt} acciones={[verCasilleros]} />
       </section>
 
       <div className="grid-main">
@@ -191,7 +203,10 @@ function DisponibilidadPorTamano({ espacios }) {
             </tbody>
           </table>
         </div>
-        <p className="card__note">Un cajón no mezcla tamaños. Los paquetes frágiles solo van a F1 y F2.</p>
+        <p className="card__note">
+          A1 y A2 guardan paquetes normales; F1 es el único compartimento para frágiles. Un casillero no mezcla
+          tamaños: el primer paquete fija el tamaño hasta que se vacía.
+        </p>
       </div>
     </section>
   );

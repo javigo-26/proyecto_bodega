@@ -26,6 +26,7 @@ VALUES ('admin', 'admin123', 'Administrador Bodega');
 IF OBJECT_ID('Almacenamiento', 'U') IS NOT NULL DROP TABLE Almacenamiento;
 IF OBJECT_ID('AutorizacionesRetiro', 'U') IS NOT NULL DROP TABLE AutorizacionesRetiro;
 IF OBJECT_ID('EventosSeguridad', 'U') IS NOT NULL DROP TABLE EventosSeguridad;
+IF OBJECT_ID('Operaciones', 'U') IS NOT NULL DROP TABLE Operaciones;
 IF OBJECT_ID('Paquetes', 'U') IS NOT NULL DROP TABLE Paquetes;
 IF OBJECT_ID('Espacios', 'U') IS NOT NULL DROP TABLE Espacios;
 IF OBJECT_ID('Estados', 'U') IS NOT NULL DROP TABLE Estados;
@@ -53,20 +54,19 @@ INSERT INTO Estados (id, nombre, descripcion) VALUES
 -- =========================================================
 CREATE TABLE Espacios (
     codigo VARCHAR(5) PRIMARY KEY,
-    tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('NORMAL', 'FRAGIL')),
+    tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('NORMAL', 'FRAGIL')), -- Tipo fijo del casillero
     estado_id INT NOT NULL DEFAULT 1 FOREIGN KEY REFERENCES Estados(id),
     modo_tamano VARCHAR(10) NULL CHECK (modo_tamano IN ('PEQUENO', 'MEDIANO', 'GRANDE')),
     capacidad_max INT NOT NULL,
     ocupacion_actual INT NOT NULL DEFAULT 0
 );
 
+-- 3 compartimentos de la maqueta: A1 y A2 para paquetes normales, F1 solo para frágiles.
+-- El primer paquete fija el tamaño del casillero hasta que se vacía.
 INSERT INTO Espacios (codigo, tipo, estado_id, modo_tamano, capacidad_max, ocupacion_actual) VALUES
 ('A1', 'NORMAL', 1, NULL, 3, 0),
 ('A2', 'NORMAL', 1, NULL, 3, 0),
-('A3', 'NORMAL', 1, NULL, 3, 0),
-('A4', 'NORMAL', 1, NULL, 3, 0),
-('F1', 'FRAGIL', 1, NULL, 3, 0),
-('F2', 'FRAGIL', 1, NULL, 3, 0);
+('F1', 'FRAGIL', 1, NULL, 3, 0);
 
 
 -- =========================================================
@@ -110,6 +110,16 @@ CREATE TABLE EventosSeguridad (
     descripcion TEXT,
     fecha DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Bitácora: cada operación hecha desde la pantalla o informada por el ESP32
+CREATE TABLE Operaciones (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    instruccion NVARCHAR(100) NOT NULL,
+    resultado VARCHAR(10) NOT NULL CHECK (resultado IN ('ACEPTADA', 'RECHAZADA', 'ALERTA')),
+    detalle NVARCHAR(255) NULL,
+    origen VARCHAR(10) NOT NULL DEFAULT 'PANTALLA' CHECK (origen IN ('PANTALLA', 'ESP32'))
+);
 GO
 
 -- =========================================================
@@ -117,6 +127,7 @@ GO
 -- =========================================================
 CREATE OR ALTER FUNCTION fn_ValidarCapacidadEspacio (
     @codigo_espacio VARCHAR(5),
+    @tipo_paquete VARCHAR(10),
     @tamano_paquete VARCHAR(10)
 )
 RETURNS BIT
@@ -124,18 +135,21 @@ AS
 BEGIN
     DECLARE @puede_almacenar BIT = 0;
     DECLARE @modo_actual VARCHAR(10);
+    DECLARE @tipo_actual VARCHAR(10);
     DECLARE @capacidad_max INT;
     DECLARE @ocupacion_actual INT;
 
     SELECT 
         @modo_actual = modo_tamano,
+        @tipo_actual = tipo,
         @capacidad_max = capacidad_max,
         @ocupacion_actual = ocupacion_actual
     FROM Espacios WHERE codigo = @codigo_espacio;
 
-    IF @ocupacion_actual = 0
-        SET @puede_almacenar = 1;
-    ELSE IF @modo_actual = @tamano_paquete AND @ocupacion_actual < @capacidad_max
+    -- Solo recibe paquetes de su tipo. Vacío acepta cualquier tamaño;
+    -- con paquetes dentro, solo el mismo tamaño y si le queda cupo.
+    IF @tipo_actual = @tipo_paquete
+       AND (@ocupacion_actual = 0 OR (@modo_actual = @tamano_paquete AND @ocupacion_actual < @capacidad_max))
         SET @puede_almacenar = 1;
 
     RETURN @puede_almacenar;
@@ -170,12 +184,12 @@ BEGIN
             WHEN @tamano = 'GRANDE'  THEN 1
         END;
 
+        -- Primero completa un casillero que ya tenga ese tipo y tamaño; si no hay, usa uno vacío
         SELECT TOP 1 @espacio_asignado = codigo
         FROM Espacios
-        WHERE tipo = @tipo 
-          AND estado_id IN (1, 2)
-          AND dbo.fn_ValidarCapacidadEspacio(codigo, @tamano) = 1
-        ORDER BY codigo ASC;
+        WHERE estado_id IN (1, 2)
+          AND dbo.fn_ValidarCapacidadEspacio(codigo, @tipo, @tamano) = 1
+        ORDER BY CASE WHEN ocupacion_actual > 0 THEN 0 ELSE 1 END, codigo ASC;
 
         IF @espacio_asignado IS NULL
         BEGIN
