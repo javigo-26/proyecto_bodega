@@ -5,7 +5,7 @@ const { sendCommand } = require('./serialService');
 
 const VENTANA_RETIRO_SEGUNDOS = 60; // Duración de la autorización de retiro (informe: 30-60 s)
 const TAMANOS = ['PEQUENO', 'MEDIANO', 'GRANDE'];
-const SENSORES = ['HS', 'HM', 'WS', 'WM', 'DS', 'DM'];
+const SENSORES = ['LOWER', 'MIDDLE', 'UPPER']; // Sensores de altura de la estación: inferior, medio y superior
 
 // LED que debe encender el ESP32 según el estado del espacio
 const LED_POR_ESTADO = { 1: 'AVAILABLE', 2: 'PARTIAL', 3: 'OCCUPIED', 4: 'ALARM' };
@@ -153,15 +153,16 @@ async function listarOperaciones({ desde, hasta } = {}) {
     return result.recordset;
 }
 
-// Convierte la lectura del ESP32 en { tamano, sensores }; si no trae tamaño lo clasifica con la regla del informe
+// Convierte la lectura del ESP32 en { tamano, sensores }; si no trae tamaño lo clasifica por la altura de la caja:
+// llega al sensor superior → GRANDE, al medio → MEDIANO, solo al inferior → PEQUENO
 function interpretarMedicion(lectura = {}) {
     const sensores = lectura.sensors
         ? Object.fromEntries(SENSORES.map((nombre) => [nombre, Boolean(lectura.sensors[nombre])]))
         : {};
 
     let tamano = 'PEQUENO';
-    if (sensores.HM || sensores.WM || sensores.DM) tamano = 'GRANDE';
-    else if (sensores.HS || sensores.WS || sensores.DS) tamano = 'MEDIANO';
+    if (sensores.UPPER) tamano = 'GRANDE';
+    else if (sensores.MIDDLE) tamano = 'MEDIANO';
 
     return { tamano: TAMANOS.includes(lectura.size) ? lectura.size : tamano, sensores };
 }

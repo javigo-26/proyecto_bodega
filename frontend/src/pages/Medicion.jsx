@@ -14,11 +14,11 @@ import {
   etiqueta,
 } from '../utils/bodega.js';
 
-// Los 6 sensores IR de la estación: dos umbrales por eje
-const EJES = [
-  { eje: 'Altura', pequeno: 'HS', mediano: 'HM' },
-  { eje: 'Ancho', pequeno: 'WS', mediano: 'WM' },
-  { eje: 'Profundidad', pequeno: 'DS', mediano: 'DM' },
+// Los 3 sensores de altura de la estación, de abajo hacia arriba, y el tamaño que indica cada uno
+const SENSORES = [
+  { nombre: 'LOWER', altura: 'Inferior', tamano: 'Pequeño' },
+  { nombre: 'MIDDLE', altura: 'Medio', tamano: 'Mediano' },
+  { nombre: 'UPPER', altura: 'Superior', tamano: 'Grande' },
 ];
 
 // Módulo de medición: mide el paquete en la estación IR y lo registra con el tamaño detectado
@@ -136,8 +136,8 @@ export default function Medicion() {
 
           <p className="hint">
             <FaInfoCircle aria-hidden="true" />
-            Coloca la caja contra la esquina y las guías de la estación. La fragilidad se indica aquí: los sensores IR no
-            pueden detectarla.
+            Coloca la caja contra la esquina y las guías de la estación. La fragilidad se indica aquí: los sensores de altura
+            no pueden detectarla.
           </p>
 
           <button type="button" className="btn" onClick={medir} disabled={!valido || ocupado}>
@@ -146,20 +146,20 @@ export default function Medicion() {
 
           <div className="table-wrap sensores">
             <table className="table table--compact">
-              <caption className="sr-only">Lectura de los sensores infrarrojos</caption>
+              <caption className="sr-only">Lectura de los sensores de altura</caption>
               <thead>
                 <tr>
-                  <th>Eje</th>
-                  <th>Umbral pequeño</th>
-                  <th>Umbral mediano</th>
+                  <th>Altura</th>
+                  <th>Si detecta la caja</th>
+                  <th>Lectura</th>
                 </tr>
               </thead>
               <tbody>
-                {EJES.map(({ eje, pequeno, mediano }) => (
-                  <tr key={eje}>
-                    <td>{eje}</td>
-                    <td><Sensor nombre={pequeno} valor={medicion?.sensores[pequeno]} /></td>
-                    <td><Sensor nombre={mediano} valor={medicion?.sensores[mediano]} /></td>
+                {SENSORES.map(({ nombre, altura, tamano }) => (
+                  <tr key={nombre}>
+                    <td>{altura}</td>
+                    <td>{tamano}</td>
+                    <td><Sensor nombre={nombre} valor={medicion?.sensores[nombre]} /></td>
                   </tr>
                 ))}
               </tbody>

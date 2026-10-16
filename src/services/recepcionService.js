@@ -23,7 +23,7 @@ async function siguienteId() {
 // Valores aceptados para "fragile": booleano o 1/0 (algunos firmwares envían números)
 const FRAGIL_VALIDO = [true, false, 1, 0];
 
-// Registra el paquete que detectó la estación de recepción: la placa indica si es frágil y los sensores IR el tamaño.
+// Registra el paquete que detectó la estación de recepción: la placa indica si es frágil y los sensores de altura el tamaño.
 // Queda REGISTRADO y aparece en la tabla de Recepción hasta que el operador lo almacena o lo cancela.
 async function recibirPaquete(lectura = {}) {
     // Sin el dato de la placa no se adivina el tipo: un frágil podría terminar en A1 o A2

@@ -134,10 +134,10 @@ export function disponibilidadPorTamano(espacios) {
   });
 }
 
-// Clasifica con los 6 sensores IR: supera M en un eje → GRANDE; supera S → MEDIANO; si no → PEQUENO
+// Clasifica con los 3 sensores de altura: llega al superior → GRANDE; al medio → MEDIANO; si no → PEQUENO
 export function clasificarPorSensores(sensores = {}) {
-  if (sensores.HM || sensores.WM || sensores.DM) return 'GRANDE';
-  if (sensores.HS || sensores.WS || sensores.DS) return 'MEDIANO';
+  if (sensores.UPPER) return 'GRANDE';
+  if (sensores.MIDDLE) return 'MEDIANO';
   return 'PEQUENO';
 }
 
