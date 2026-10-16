@@ -38,13 +38,13 @@ async function obtenerPaquete(id) {
     return result.recordset[0] ?? null;
 }
 
-// Paquetes activos (no eliminados) que ocupan un casillero: ASIGNADO, ALMACENADO o RETIRO_AUTORIZADO
+// Paquetes activos (no eliminados): en recepción (REGISTRADO, ASIGNADO) o guardados (ALMACENADO, RETIRO_AUTORIZADO)
 async function listarPaquetesActivos() {
     const pool = await poolPromise;
     const result = await pool.request().query(`
         ${CONSULTA_PAQUETES}
-        WHERE P.activo = 1 AND P.estado_id IN (6, 7, 8)
-        ORDER BY A.fecha_ingreso DESC`);
+        WHERE P.activo = 1 AND P.estado_id IN (5, 6, 7, 8)
+        ORDER BY ISNULL(A.fecha_ingreso, P.fecha_registro) DESC`);
     return result.recordset;
 }
 
@@ -75,7 +75,7 @@ async function expirarAutorizaciones() {
         )`);
 }
 
-// Descuenta un paquete del espacio; vacío vuelve a aceptar cualquier tamaño. La alarma se mantiene.
+// Descuenta un paquete del espacio; vacío vuelve a aceptar cualquier tamaño de su tipo. La alarma se mantiene.
 async function liberarCupo(transaction, codigo) {
     await new sql.Request(transaction)
         .input('codigo', sql.VarChar(5), codigo)
@@ -113,6 +113,46 @@ async function apagarAlarmas() {
     return result.recordset.map((espacio) => espacio.codigo);
 }
 
+// Guarda una operación en la bitácora. Si la bitácora falla, la operación principal no se detiene.
+// resultado: ACEPTADA | RECHAZADA | ALERTA · origen: PANTALLA | ESP32
+async function registrarOperacion({ instruccion, resultado, detalle, origen = 'PANTALLA' }) {
+    try {
+        const pool = await poolPromise;
+        await pool.request()
+            .input('instruccion', sql.NVarChar(100), String(instruccion ?? '').trim().slice(0, 100))
+            .input('resultado', sql.VarChar(10), resultado)
+            .input('detalle', sql.NVarChar(255), detalle ? String(detalle).slice(0, 255) : null)
+            .input('origen', sql.VarChar(10), origen)
+            .query(`
+                INSERT INTO Operaciones (instruccion, resultado, detalle, origen)
+                VALUES (@instruccion, @resultado, @detalle, @origen)`);
+    } catch (err) {
+        console.error('⚠️ No se pudo guardar la operación en la bitácora:', err.message);
+    }
+}
+
+// Bitácora de operaciones, de la más reciente a la más antigua, opcionalmente entre dos fechas (YYYY-MM-DD, incluidas)
+const LIMITE_OPERACIONES = 500;
+async function listarOperaciones({ desde, hasta } = {}) {
+    const pool = await poolPromise;
+    const request = pool.request();
+    const filtros = [];
+    if (desde) {
+        request.input('desde', sql.VarChar(10), desde);
+        filtros.push('fecha >= CAST(@desde AS DATE)');
+    }
+    if (hasta) {
+        request.input('hasta', sql.VarChar(10), hasta);
+        filtros.push('fecha < DATEADD(DAY, 1, CAST(@hasta AS DATE))');
+    }
+    const result = await request.query(`
+        SELECT TOP (${LIMITE_OPERACIONES}) id, fecha, instruccion, resultado, detalle, origen
+        FROM Operaciones
+        ${filtros.length ? `WHERE ${filtros.join(' AND ')}` : ''}
+        ORDER BY fecha DESC, id DESC`);
+    return result.recordset;
+}
+
 // Convierte la lectura del ESP32 en { tamano, sensores }; si no trae tamaño lo clasifica con la regla del informe
 function interpretarMedicion(lectura = {}) {
     const sensores = lectura.sensors
@@ -134,6 +174,8 @@ module.exports = {
     expirarAutorizaciones,
     interpretarMedicion,
     liberarCupo,
+    listarOperaciones,
     listarPaquetesActivos,
-    obtenerPaquete
+    obtenerPaquete,
+    registrarOperacion
 };

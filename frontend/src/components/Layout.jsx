@@ -5,6 +5,7 @@ import {
   FaBell,
   FaBoxes,
   FaExclamationTriangle,
+  FaInbox,
   FaMoon,
   FaPowerOff,
   FaRulerCombined,
@@ -19,12 +20,14 @@ import { useBodega } from '../context/BodegaContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { iniciales } from '../utils/bodega.js';
 
-// Opciones del menú lateral y título de cada página
+// Opciones del menú lateral (en el orden del flujo de trabajo) y título de cada página
 const MENU = [
   { to: '/', etiqueta: 'Dashboard', titulo: 'Área de control', icono: FaTachometerAlt },
+  { to: '/recepcion', etiqueta: 'Recepción', titulo: 'Recepción de paquetes', icono: FaInbox },
+  // Medición desactivada: la estación detecta tipo y tamaño al recibir el paquete
+  // { to: '/medicion', etiqueta: 'Medición', titulo: 'Medición de paquetes', icono: FaRulerCombined },
+  { to: '/autorizaciones', etiqueta: 'Retiro', titulo: 'Autorización de retiro', icono: FaUserShield },
   { to: '/paquetes', etiqueta: 'Paquetes', titulo: 'Paquetes almacenados', icono: FaBoxes },
-  { to: '/autorizaciones', etiqueta: 'Ingreso y retiro', titulo: 'Autorización de ingreso y retiro', icono: FaUserShield },
-  { to: '/medicion', etiqueta: 'Medición', titulo: 'Medición de paquetes', icono: FaRulerCombined },
 ];
 
 const ESCRITORIO = '(min-width: 992px)';

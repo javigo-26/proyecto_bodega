@@ -4,10 +4,12 @@ import { FaBoxes, FaPlus, FaSearch, FaSignOutAlt, FaTrashAlt } from 'react-icons
 import PaquetesTable from '../components/PaquetesTable.jsx';
 import { useBodega } from '../context/BodegaContext.jsx';
 import { eliminarPaquete } from '../services/api.js';
+import { estaGuardado } from '../utils/bodega.js';
 
-// Listado de paquetes activos con búsqueda, filtro por tipo y eliminado lógico
+// Listado de paquetes guardados con búsqueda, filtro por tipo y eliminado lógico (los pendientes están en Recepción)
 export default function Paquetes() {
-  const { paquetes, errorPaquetes, ejecutar } = useBodega();
+  const { paquetes: activos, errorPaquetes, ejecutar } = useBodega();
+  const paquetes = useMemo(() => activos.filter(estaGuardado), [activos]);
   const [parametros, setParametros] = useSearchParams();
   const texto = parametros.get('q') ?? '';
   const tipo = parametros.get('tipo') ?? '';
@@ -45,7 +47,7 @@ export default function Paquetes() {
           <span className="badge badge--count">{filtrados.length}</span>
         </h2>
         <div className="card__tools">
-          <Link to="/medicion" className="btn btn--sm">
+          <Link to="/recepcion" className="btn btn--sm">
             <FaPlus aria-hidden="true" /> Nuevo paquete
           </Link>
         </div>

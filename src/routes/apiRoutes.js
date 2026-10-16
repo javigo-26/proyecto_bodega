@@ -16,6 +16,9 @@ router.get('/paquetes', bodegaController.getPaquetes);
 router.delete('/paquetes/:id', bodegaController.eliminarPaquete);
 router.post('/medicion', bodegaController.medirPaquete);
 
+// Bitácora de todas las operaciones (filtro opcional por fecha)
+router.get('/operaciones', bodegaController.getOperaciones);
+
 // Ruta para la consola del Lenguaje Formal (Autómatas)[cite: 12]
 router.post('/lenguaje/ejecutar', automatasController.processCommand);
 

@@ -1,10 +1,18 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { FaArrowRight, FaBox, FaInfoCircle, FaRulerCombined, FaSave, FaWineGlassAlt } from 'react-icons/fa';
+import { Link, useSearchParams } from 'react-router-dom';
+import { FaArrowRight, FaBox, FaInbox, FaInfoCircle, FaRulerCombined, FaSave, FaWineGlassAlt } from 'react-icons/fa';
 import { useAlert } from '../context/AlertContext.jsx';
 import { useBodega } from '../context/BodegaContext.jsx';
 import { ejecutarComando, medirPaquete } from '../services/api.js';
-import { CAPACIDAD, PATRON_ID, TAMANOS, TIPOS, clasificarPorSensores, etiqueta } from '../utils/bodega.js';
+import {
+  CAPACIDAD,
+  PATRON_ID,
+  TAMANOS,
+  TIPOS,
+  casillerosCompatibles,
+  clasificarPorSensores,
+  etiqueta,
+} from '../utils/bodega.js';
 
 // Los 6 sensores IR de la estación: dos umbrales por eje
 const EJES = [
@@ -15,14 +23,22 @@ const EJES = [
 
 // Módulo de medición: mide el paquete en la estación IR y lo registra con el tamaño detectado
 export default function Medicion() {
-  const { ejecutar } = useBodega();
+  const [parametros] = useSearchParams();
+  const { espacios, ejecutar } = useBodega();
   const { notificar } = useAlert();
-  const [id, setId] = useState('');
-  const [tipo, setTipo] = useState('NORMAL');
+  // Datos que llegan desde Recepción (?id=P001&tipo=FRAGIL&tamano=MEDIANO)
+  const [id, setId] = useState(() => (parametros.get('id') ?? '').toUpperCase());
+  const [tipo, setTipo] = useState(() => (TIPOS.includes(parametros.get('tipo')) ? parametros.get('tipo') : 'NORMAL'));
+  const [declarado, setDeclarado] = useState(() =>
+    TAMANOS.includes(parametros.get('tamano')) ? parametros.get('tamano') : null
+  );
   const [medicion, setMedicion] = useState(null); // { tamano, sensores }
   const [ocupado, setOcupado] = useState(false);
   const [registrado, setRegistrado] = useState(null);
   const valido = PATRON_ID.test(id);
+
+  // Casillero que recibiría el paquete con el tamaño medido (se actualiza en vivo)
+  const destino = medicion ? casillerosCompatibles(espacios, tipo, medicion.tamano)[0] : null;
 
   // Solicita la lectura de los sensores al ESP32 por medio del backend
   const medir = async () => {
@@ -52,14 +68,16 @@ export default function Medicion() {
     if (ok) {
       setRegistrado(id);
       setMedicion(null);
+      setDeclarado(null);
       setId('');
     }
   };
 
-  // Cambia el id y descarta una medición anterior
+  // Cambia el id y descarta una medición anterior y el tamaño declarado en recepción
   const cambiarId = (evento) => {
     setId(evento.target.value.toUpperCase().trim());
     setMedicion(null);
+    setDeclarado(null);
   };
 
   return (
@@ -71,6 +89,13 @@ export default function Medicion() {
           </h2>
         </header>
         <div className="card__body">
+          {declarado && (
+            <p className="hint">
+              <FaInbox aria-hidden="true" />
+              Viene de recepción con tamaño declarado {etiqueta(declarado).toLowerCase()}. La medición lo confirma.
+            </p>
+          )}
+
           <div className="form-row">
             <div className="field">
               <label htmlFor="medicion-id">Identificador del paquete</label>
@@ -142,14 +167,23 @@ export default function Medicion() {
           </div>
 
           {medicion && (
-            <div className="resultado" role="status">
+            <div className={`resultado${destino ? '' : ' resultado--warning'}`} role="status">
               <div>
                 <span className="muted">Tamaño detectado</span>
                 <span className="resultado__valor">{etiqueta(medicion.tamano)}</span>
                 <span className="muted">
-                  Un cajón admite {CAPACIDAD[medicion.tamano]} de este tamaño
-                  {tipo === 'FRAGIL' ? ' · irá a F1 o F2' : ''}.
+                  Un cajón admite {CAPACIDAD[medicion.tamano]} de este tamaño ·{' '}
+                  {destino
+                    ? `casillero disponible: ${destino.codigo}`
+                    : `ningún casillero tiene lugar para un paquete ${tipo === 'FRAGIL' ? 'frágil' : 'normal'} de este tamaño`}
+                  .
                 </span>
+                {declarado && declarado !== medicion.tamano && (
+                  <p className="resultado__nota">
+                    En recepción se declaró {etiqueta(declarado).toLowerCase()}; se registrará como{' '}
+                    {etiqueta(medicion.tamano).toLowerCase()}.
+                  </p>
+                )}
               </div>
               <button type="button" className="btn btn--success" onClick={registrar} disabled={ocupado}>
                 <FaSave aria-hidden="true" /> Registrar
@@ -193,7 +227,10 @@ export default function Medicion() {
               </li>
             ))}
           </ul>
-          <p className="card__note">Un cajón no mezcla tamaños: el primer paquete fija el tamaño hasta que se vacía.</p>
+          <p className="card__note">
+            A1 y A2 guardan normales; F1 es el único compartimento para frágiles. Un casillero no mezcla tamaños: el
+            primer paquete fija el tamaño hasta que se vacía.
+          </p>
         </div>
       </section>
     </div>

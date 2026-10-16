@@ -44,6 +44,15 @@ export const ejecutarComando = (nombre, ...args) =>
     body: { command: `${nombre}(${args.join(',')})` },
   });
 
+// Bitácora de operaciones, opcionalmente entre dos fechas (AAAA-MM-DD): [{ id, fecha, instruccion, resultado, detalle, origen }]
+export function getOperaciones({ desde, hasta } = {}) {
+  const parametros = new URLSearchParams();
+  if (desde) parametros.set('desde', desde);
+  if (hasta) parametros.set('hasta', hasta);
+  const consulta = parametros.toString();
+  return request(`/operaciones${consulta ? `?${consulta}` : ''}`);
+}
+
 // Paquetes activos: [{ id, tipo, tamano, estado, espacio_codigo, fecha_registro, fecha_ingreso }]
 export const getPaquetes = () => request('/paquetes');
 
@@ -52,5 +61,6 @@ export const eliminarPaquete = (id) =>
   request(`/paquetes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
 // Pide al ESP32 medir el paquete: { tamano, sensores: { HS, HM, WS, WM, DS, DM } }
+// Sin uso mientras la página de Medición esté desactivada (la estación de recepción detecta el tamaño sola)
 export const medirPaquete = (paqueteId) =>
   request('/medicion', { method: 'POST', body: { paquete_id: paqueteId } });
