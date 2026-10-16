@@ -15,11 +15,12 @@ require('dotenv').config();
  *   {"type":"COMMAND","action":"MEASURE","package":"P001"}
  *
  * ESP32 → Backend
- *   {"type":"PACKAGE","fragile":true,"size":"MEDIANO","sensors":{"HS":1,"HM":0,"WS":1,"WM":0,"DS":0,"DM":0}}
- *       Paquete colocado en la estación de recepción: la placa indica si es frágil y los sensores el tamaño.
+ *   {"type":"PACKAGE","fragile":true,"size":"MEDIANO","sensors":{"LOWER":1,"MIDDLE":1,"UPPER":0}}
+ *       Paquete colocado en la estación de recepción: la placa indica si es frágil y los 3 sensores de altura el tamaño.
  *       "fragile" es obligatorio (true/false o 1/0); si falta, el paquete se rechaza y queda en la bitácora.
  *   {"type":"ALARM","space":"A1","reason":"UNAUTHORIZED_REMOVAL"}
- *   {"type":"MEASUREMENT","size":"MEDIANO","sensors":{"HS":1,"HM":0,"WS":1,"WM":0,"DS":0,"DM":0}}
+ *   {"type":"MEASUREMENT","package":"P001","size":"PEQUENO","sensors":{"LOWER":1,"MIDDLE":0,"UPPER":0}}
+ *       Solo como respuesta a MEASURE (página de Medición, hoy desactivada); si nadie pidió medir, se ignora.
  *   {"type":"ERROR","message":"..."}
  */
 
@@ -116,7 +117,12 @@ try {
             }
 
             // Respuesta a la solicitud de medición
-            if (data.type === 'MEASUREMENT') terminarMedicion(null, data);
+            if (data.type === 'MEASUREMENT') {
+                if (!medicionPendiente) {
+                    console.warn('⚠️ Llegó MEASUREMENT sin una medición pendiente; se ignora. Para registrar un paquete el ESP32 debe enviar "type":"PACKAGE".');
+                }
+                terminarMedicion(null, data);
+            }
             if (data.type === 'ERROR') terminarMedicion(crearError(502, `El ESP32 reportó un error: ${data.message}`));
         } catch (err) {
             console.error('⚠️ Error procesando mensaje Serial:', err.message);

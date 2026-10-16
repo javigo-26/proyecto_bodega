@@ -264,8 +264,8 @@ export default function Recepcion() {
           </header>
           <ol className="rules">
             <li>
-              <strong>Tipo y tamaño automáticos:</strong> la placa detecta si el paquete es frágil o normal y los sensores
-              IR miden su tamaño.
+              <strong>Tipo y tamaño automáticos:</strong> la placa detecta si el paquete es frágil o normal y los 3
+              sensores de altura miden su tamaño (inferior: pequeño, medio: mediano, superior: grande).
             </li>
             <li>
               <strong>Frágil con frágil, normal con normal:</strong> los normales van a A1 o A2; F1 es el único
