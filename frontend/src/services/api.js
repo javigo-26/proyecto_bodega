@@ -53,8 +53,13 @@ export function getOperaciones({ desde, hasta } = {}) {
   return request(`/operaciones${consulta ? `?${consulta}` : ''}`);
 }
 
-// Paquetes activos: [{ id, tipo, tamano, estado, espacio_codigo, fecha_registro, fecha_ingreso }]
+// Paquetes activos: [{ id, tipo, tamano, estado, descripcion, espacio_codigo, fecha_registro, fecha_ingreso }]
 export const getPaquetes = () => request('/paquetes');
+
+// Edita un paquete en Recepción: { id: 'P120', descripcion: 'texto' } → { message, id }
+// El id solo cambia mientras el paquete no tenga casillero asignado
+export const actualizarPaquete = (id, cambios) =>
+  request(`/paquetes/${encodeURIComponent(id)}`, { method: 'PATCH', body: cambios });
 
 // Eliminado lógico: marca el paquete como inactivo sin borrarlo de la base de datos
 export const eliminarPaquete = (id) =>

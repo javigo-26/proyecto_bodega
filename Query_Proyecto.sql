@@ -78,6 +78,7 @@ CREATE TABLE Paquetes (
     tamano VARCHAR(10) NOT NULL CHECK (tamano IN ('PEQUENO', 'MEDIANO', 'GRANDE')),
     estado_id INT NOT NULL DEFAULT 5 FOREIGN KEY REFERENCES Estados(id),
     activo BIT NOT NULL DEFAULT 1, -- Eliminado logico: 0 = eliminado (la fila no se borra)
+    descripcion NVARCHAR(200) NULL, -- Dato libre que escribe el operador en Recepción
     fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

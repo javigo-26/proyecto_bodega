@@ -18,7 +18,7 @@ const ESTADO_POR_OCUPACION = `
 
 // Paquetes con su estado y el casillero donde están guardados actualmente
 const CONSULTA_PAQUETES = `
-    SELECT P.id, P.tipo, P.tamano, P.estado_id, Est.nombre AS estado, P.activo,
+    SELECT P.id, P.tipo, P.tamano, P.estado_id, Est.nombre AS estado, P.activo, P.descripcion,
            P.fecha_registro, A.espacio_codigo, A.fecha_ingreso
     FROM Paquetes P
     INNER JOIN Estados Est ON P.estado_id = Est.id

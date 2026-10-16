@@ -15,6 +15,7 @@ const {
 
 const PATRON_ID = /^P\d{3}$/; // Mismo formato de identificador que el analizador léxico
 const PATRON_FECHA = /^\d{4}-\d{2}-\d{2}$/; // Fecha de los filtros: YYYY-MM-DD
+const LARGO_DESCRIPCION = 200; // Igual que la columna Paquetes.descripcion
 
 // Obtener el estado de las 6 celdas con el nombre textual del estado
 exports.getEspacios = async (req, res) => {
@@ -92,6 +93,54 @@ exports.eliminarPaquete = async (req, res) => {
     } catch (err) {
         await registrarOperacion({ instruccion, resultado: 'RECHAZADA', detalle: err.message });
         res.status(500).json({ error: err.message });
+    }
+};
+
+// Editar un paquete que espera en Recepción: su identificador (solo si aún no tiene casillero) y su descripción.
+// Cuerpo: { id?: 'P120', descripcion?: 'texto' }
+exports.actualizarPaquete = async (req, res) => {
+    const { id } = req.params;
+    const nuevoId = typeof req.body?.id === 'string' ? req.body.id.trim().toUpperCase() : id;
+    const descripcion = typeof req.body?.descripcion === 'string' ? req.body.descripcion.trim() : undefined;
+    const instruccion = `EDITAR(${id})`;
+
+    // Responde con error y lo deja en la bitácora
+    const rechazar = async (status, error) => {
+        await registrarOperacion({ instruccion, resultado: 'RECHAZADA', detalle: error });
+        return res.status(status).json({ error });
+    };
+
+    try {
+        const paquete = await obtenerPaquete(id);
+        if (!paquete || !paquete.activo) return rechazar(404, `El paquete ${id} no existe o fue eliminado.`);
+        if (paquete.estado_id !== 5 && paquete.estado_id !== 6) {
+            return rechazar(409, `El paquete ${id} ya no está en Recepción; no se puede editar.`);
+        }
+        if (descripcion !== undefined && descripcion.length > LARGO_DESCRIPCION) {
+            return rechazar(400, `La descripción admite hasta ${LARGO_DESCRIPCION} caracteres.`);
+        }
+
+        // El identificador solo cambia antes de asignar casillero (todavía nada lo referencia)
+        const cambiaId = nuevoId !== id;
+        if (cambiaId) {
+            if (!PATRON_ID.test(nuevoId)) return rechazar(400, 'Identificador inválido. Formato: P seguido de 3 dígitos (P001).');
+            if (paquete.estado_id !== 5) return rechazar(409, `El paquete ${id} ya tiene casillero asignado; su identificador no se puede cambiar.`);
+            if (await obtenerPaquete(nuevoId)) return rechazar(409, `Ya existe un paquete con el identificador ${nuevoId}.`);
+        }
+
+        const pool = await poolPromise;
+        await pool.request()
+            .input('id', sql.VarChar(10), id)
+            .input('nuevoId', sql.VarChar(10), nuevoId)
+            .input('descripcion', sql.NVarChar(LARGO_DESCRIPCION), descripcion === undefined ? paquete.descripcion : descripcion || null)
+            .query('UPDATE Paquetes SET id = @nuevoId, descripcion = @descripcion WHERE id = @id');
+
+        const cambios = [cambiaId && `identificador ${id} → ${nuevoId}`, descripcion !== undefined && 'descripción actualizada'];
+        const message = `Paquete ${nuevoId}: ${cambios.filter(Boolean).join(', ') || 'sin cambios'}.`;
+        await registrarOperacion({ instruccion, resultado: 'ACEPTADA', detalle: message });
+        res.json({ success: true, message, id: nuevoId });
+    } catch (err) {
+        await rechazar(500, err.message);
     }
 };
 

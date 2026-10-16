@@ -741,6 +741,38 @@ code {
   white-space: normal;
 }
 
+/* Si falta ancho, Cancelar baja debajo de Almacenar en vez de desbordar la tabla */
+.table--recepcion .table__actions {
+  white-space: normal;
+}
+
+.table--recepcion .table__actions .btn {
+  margin-block: 0.15rem;
+}
+
+.table__error {
+  display: block;
+  max-width: 9rem;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+/* Descripción en la lista de paquetes: hasta 2 líneas; el texto completo aparece al pasar el cursor */
+.table__descripcion {
+  min-width: 8rem;
+  max-width: 16rem;
+}
+
+.table__descripcion > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
 .table__actions {
   text-align: right;
   white-space: nowrap;
@@ -884,6 +916,22 @@ code {
   width: auto;
   padding: 0.25rem 0.5rem;
   font-size: 0.9rem;
+}
+
+/* Campos editables dentro de la tabla de Recepción */
+.input--id {
+  width: 4.75rem;
+}
+
+.input--descripcion {
+  width: 100%;
+  min-width: 8rem;
+}
+
+.input:disabled {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: not-allowed;
 }
 
 /* Bitácora de operaciones */

@@ -22,13 +22,16 @@ export default function Paquetes() {
     setParametros(siguientes, { replace: true });
   };
 
-  // Filtra por identificador o casillero y por tipo
+  // Filtra por identificador, casillero o descripción y por tipo
   const filtrados = useMemo(() => {
     const busqueda = texto.trim().toUpperCase();
     return paquetes.filter(
       (paquete) =>
         (!tipo || paquete.tipo === tipo) &&
-        (!busqueda || String(paquete.id).includes(busqueda) || paquete.espacio_codigo?.includes(busqueda))
+        (!busqueda ||
+          String(paquete.id).includes(busqueda) ||
+          paquete.espacio_codigo?.includes(busqueda) ||
+          paquete.descripcion?.toUpperCase().includes(busqueda))
     );
   }, [paquetes, texto, tipo]);
 
@@ -60,8 +63,8 @@ export default function Paquetes() {
             type="search"
             value={texto}
             onChange={(evento) => cambiarFiltro('q', evento.target.value.toUpperCase())}
-            placeholder="Buscar por paquete o casillero (P001, A1…)"
-            aria-label="Buscar por paquete o casillero"
+            placeholder="Buscar por paquete, casillero o descripción (P001, A1…)"
+            aria-label="Buscar por paquete, casillero o descripción"
           />
           <span className="input-group__icon" aria-hidden="true">
             <FaSearch />

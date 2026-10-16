@@ -13,6 +13,7 @@ router.post('/alarmas/apagar', bodegaController.apagarAlarma);
 
 // Rutas de Paquetes (solo activos, eliminado lógico) y de la estación de medición
 router.get('/paquetes', bodegaController.getPaquetes);
+router.patch('/paquetes/:id', bodegaController.actualizarPaquete); // editar id y descripción en Recepción
 router.delete('/paquetes/:id', bodegaController.eliminarPaquete);
 router.post('/medicion', bodegaController.medirPaquete);
 
